@@ -13,10 +13,12 @@ import android.view.MenuItem;
 
 import org.altbeacon.beacon.BeaconConsumer;
 import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.BeaconParser;
+import org.altbeacon.beacon.Identifier;
 import org.altbeacon.beacon.MonitorNotifier;
 import org.altbeacon.beacon.Region;
 
-public class MainActivity extends AppCompatActivity implements BeaconConsumer {
+public class MainActivity extends AppCompatActivity implements BeaconConsumer, MonitorNotifier {
     protected static final String TAG = "Beacon Monitoring";
     private BeaconManager beaconManager;
     @Override
@@ -34,8 +36,27 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
             }
         });
         beaconManager = BeaconManager.getInstanceForApplication(this);
+        // To detect proprietary beacons, you must add a line like below corresponding to your beacon
+        // type.  Do a web search for "setBeaconLayout" to get the proper expression.
+        //Alt Beacon
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+               setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT));
+        // Detect the main identifier (UID) frame:
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+                setBeaconLayout(BeaconParser.EDDYSTONE_UID_LAYOUT));
+// Detect the telemetry (TLM) frame:
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+                setBeaconLayout(BeaconParser.EDDYSTONE_TLM_LAYOUT));
+// Detect the URL frame:
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+                setBeaconLayout(BeaconParser.EDDYSTONE_URL_LAYOUT));
+
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+                setBeaconLayout(BeaconParser.URI_BEACON_LAYOUT));
+
         beaconManager.bind(this);
     }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -67,8 +88,20 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
 
     @Override
     public void onBeaconServiceConnect() {
-        beaconManager.removeAllMonitorNotifiers();
-        beaconManager.addMonitorNotifier(new MonitorNotifier() {
+
+        // Set the two identifiers below to null to detect any beacon regardless of identifiers
+        //Identifier myBeaconNamespaceId = Identifier.parse("0x2f234454f4911ba9ffa6");
+        //Identifier myBeaconInstanceId = Identifier.parse("0x000000000001");
+        //Region region = new Region("istem-aroundMe", myBeaconNamespaceId, myBeaconInstanceId, null);
+        Region region = new Region("istem-aroundMe", null, null, null);
+        beaconManager.addMonitorNotifier(this);
+        try {
+            beaconManager.startMonitoringBeaconsInRegion(region);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+        //beaconManager.removeAllMonitorNotifiers();
+        /*beaconManager.addMonitorNotifier(new MonitorNotifier() {
             @Override
             public void didEnterRegion(Region region) {
                 Log.i(TAG, "I just saw an beacon for the first time!");
@@ -83,11 +116,25 @@ public class MainActivity extends AppCompatActivity implements BeaconConsumer {
             public void didDetermineStateForRegion(int state, Region region) {
                 Log.i(TAG, "I have just switched from seeing/not seeing beacons: "+state);
             }
-        });
+        });*/
 
-        try {
-            beaconManager.startMonitoringBeaconsInRegion(new Region("4B:33:AB:DB:89:21", null, null, null));
-        } catch (RemoteException e) {    }
+
     }
 
+    public void didEnterRegion(Region region) {
+        Log.d(TAG, "I detected a beacon in the region with namespace id " + region.getId1() +
+                " and instance id: " + region.getId2());
+    }
+
+    public void didExitRegion(Region region) {
+    }
+
+    public void didDetermineStateForRegion(int state, Region region) {
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        beaconManager.unbind(this);
+    }
 }
